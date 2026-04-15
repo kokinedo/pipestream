@@ -2,3 +2,4 @@ pipestream
 *.db
 *.exe
 .env
+mock

@@ -22,6 +22,12 @@ type Config struct {
 	BatchSize    int
 	BatchTimeout time.Duration
 	DryRun       bool
+	ProviderName string
+}
+
+// Provider is the interface for AI classification.
+type Provider interface {
+	Classify(ctx context.Context, events []models.RawGitHubEvent, model string) ([]classificationResult, error)
 }
 
 // Classifier reads raw events, classifies them via Claude, and sends results downstream.

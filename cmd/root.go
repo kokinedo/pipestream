@@ -15,6 +15,7 @@ import (
 	"github.com/spf13/cobra"
 	"golang.org/x/sync/errgroup"
 
+	"github.com/kokinedo/pipestream/internal/auth"
 	"github.com/kokinedo/pipestream/internal/classifier"
 	"github.com/kokinedo/pipestream/internal/ingester"
 	"github.com/kokinedo/pipestream/internal/server"
@@ -29,7 +30,8 @@ var (
 	dbPath       string
 	dryRun       bool
 	pollInterval time.Duration
-	claudeModel  string
+	modelFlag    string
+	providerFlag string
 )
 
 var rootCmd = &cobra.Command{
@@ -47,9 +49,33 @@ func init() {
 	rootCmd.Flags().StringVar(&dbPath, "db", "pipestream.db", "SQLite database path")
 	rootCmd.Flags().BoolVar(&dryRun, "dry-run", false, "Skip Claude API calls, assign random classifications")
 	rootCmd.Flags().DurationVar(&pollInterval, "poll-interval", 30*time.Second, "GitHub API poll interval")
-	rootCmd.Flags().StringVar(&claudeModel, "claude-model", "claude-sonnet-4-20250514", "Claude model for classification")
+	rootCmd.Flags().StringVar(&modelFlag, "model", "", "AI model for classification (default depends on provider)")
+	rootCmd.Flags().StringVar(&providerFlag, "provider", "", "AI provider: claude, openai, gemini (default from credentials)")
+
+	loginCmd.Flags().String("provider", "claude", "Provider: claude, openai, gemini")
+	logoutCmd.Flags().String("provider", "claude", "Provider: claude, openai, gemini")
 
 	rootCmd.AddCommand(statsCmd)
+	rootCmd.AddCommand(loginCmd)
+	rootCmd.AddCommand(logoutCmd)
+}
+
+var loginCmd = &cobra.Command{
+	Use:   "login",
+	Short: "Authenticate with an AI provider",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		p, _ := cmd.Flags().GetString("provider")
+		return auth.Login(p)
+	},
+}
+
+var logoutCmd = &cobra.Command{
+	Use:   "logout",
+	Short: "Remove stored credentials for a provider",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		p, _ := cmd.Flags().GetString("provider")
+		return auth.Logout(p)
+	},
 }
 
 // Execute is the main entry point.
@@ -60,13 +86,28 @@ func Execute() {
 }
 
 func runPipeline(cmd *cobra.Command, args []string) error {
-	// Check for API key unless dry-run.
-	apiKey := os.Getenv("ANTHROPIC_API_KEY")
+	// Resolve provider and API key.
+	provider := providerFlag
+	if provider == "" {
+		provider = auth.GetDefaultProvider()
+	}
+	apiKey := auth.GetAPIKey(provider)
 	if apiKey == "" && !dryRun {
-		fmt.Fprintln(os.Stderr, "Error: ANTHROPIC_API_KEY environment variable is not set.")
-		fmt.Fprintln(os.Stderr, "Set it with: export ANTHROPIC_API_KEY=your-key")
+		fmt.Fprintf(os.Stderr, "Error: No API key for provider '%s'.\n", provider)
+		fmt.Fprintf(os.Stderr, "Run: pipestream login --provider %s\n", provider)
 		fmt.Fprintln(os.Stderr, "Or run with --dry-run to skip AI classification.")
 		os.Exit(1)
+	}
+	model := modelFlag
+	if model == "" {
+		switch provider {
+		case "openai":
+			model = "gpt-4o"
+		case "gemini":
+			model = "gemini-2.0-flash"
+		default:
+			model = "claude-sonnet-4-20250514"
+		}
 	}
 
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
@@ -94,9 +135,10 @@ func runPipeline(cmd *cobra.Command, args []string) error {
 
 	// Create classifier.
 	cls := classifier.NewClassifier(classifier.Config{
-		APIKey: apiKey,
-		Model:  claudeModel,
-		DryRun: dryRun,
+		APIKey:       apiKey,
+		Model:        model,
+		DryRun:       dryRun,
+		ProviderName: provider,
 	}, rawCh, classifiedCh)
 
 	// Create server.
