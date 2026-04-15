@@ -33,12 +33,31 @@ cd pipestream
 go build -o pipestream .
 ```
 
-## Configuration
+## Authentication
 
-Set the following environment variables before running:
+pipestream supports multiple AI providers for event classification. Use the built-in login flow:
 
 ```bash
-export ANTHROPIC_API_KEY="your-api-key"
+pipestream login                       # default: Claude
+pipestream login --provider openai     # OpenAI
+pipestream login --provider gemini     # Google Gemini
+```
+
+This opens your browser to the provider's API key page, prompts you to paste the key, and stores it locally at `~/.config/pipestream/credentials.json`.
+
+Alternatively, set environment variables:
+
+```bash
+export ANTHROPIC_API_KEY="your-key"   # Claude
+export OPENAI_API_KEY="your-key"      # OpenAI
+export GEMINI_API_KEY="your-key"      # Gemini
+export GITHUB_TOKEN="your-token"      # GitHub (optional, increases rate limit)
+```
+
+To remove stored credentials:
+
+```bash
+pipestream logout --provider claude
 ```
 
 ## Usage
@@ -53,6 +72,13 @@ Run in dry-run mode (skips AI classification, uses mock data):
 
 ```bash
 ./pipestream --dry-run
+```
+
+Use a different provider:
+
+```bash
+./pipestream --provider openai
+./pipestream --provider gemini --model gemini-2.0-flash
 ```
 
 Run in headless mode (no TUI, API only):
