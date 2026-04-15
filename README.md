@@ -4,6 +4,8 @@ Real-time data pipeline with AI classification.
 
 A Go service that ingests live GitHub public events, classifies them using Claude AI, and presents results in a beautiful terminal dashboard. Events are persisted to SQLite and available via REST and WebSocket API.
 
+![pipestream dashboard](docs/screenshot.svg)
+
 ## Features
 
 - Real-time GitHub event ingestion with deduplication
