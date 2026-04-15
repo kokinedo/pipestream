@@ -1,0 +1,4 @@
+pipestream
+*.db
+*.exe
+.env
